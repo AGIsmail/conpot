@@ -227,7 +227,10 @@ class Decoder(object):
             'start_byte, length_apdu, ctrl_1, ctrl_2, ctrl_3, ctrl_4'
         )
         unpacked_apci = apci._make(struct.unpack("bbbbbb", packed_apci))
-
+        #AGI - Control field formats:
+        #AGI - bit 0 of ctrl_1 = 0 -> I-format
+        #AGI - bit 0 = 0 and bit 1 =1 in ctrl_1 -> S-Format
+        #AGI - bit 0 & bit 1 = 1 in ctrl_1 -> U-Format
         if len(asdu) >= 1:
             type_id = int(asdu[0].encode("hex"), 16)
             try:
@@ -269,11 +272,6 @@ class Decoder(object):
                     print struct.unpack("b" * len(objects[i]), objects[i])
         return unpacked_apci
 
-    #AGI - TBD - decode control field formats and identify if it's an I-Format, S-Format or U-Format.
-    #AGI - bit 0 of ctrl_1 = 0 -> I-format
-    #AGI - bit 0 = 0 and bit 1 =1 in ctrl_1 -> S-Format
-    #AGI - bit 0 & bit 1 = 1 in ctrl_1 -> U-Format
-
     def decode_in(self, data):
         unpacked_apci = self.unpack(data)
         print unpacked_apci
@@ -289,6 +287,7 @@ if __name__ == "__main__":
     in_data = '\x68\x34\x5A\x14\x7C\x00\x0B\x07\x03\x00\x0C\x00\x10\x30\x00\xBE\x09\x00\x11\x30\x00\x90\x09\x00\x0E\x30\x00\x75\x00\x00\x28\x30\x00\x25\x09\x00\x29\x30\x00\x75\x00\x00\x0F\x30\x00\x0F\x0A\x00\x2E\x30\x00\xAE\x05\x00'
     #in_data = '\x68\x0E\x4E\x14\x7C\x00\x65\x01\x0A\x00\x0C\x00\x00\x00\x00\x05'
     ##in_data = 'h\x19\x04\x00\x04\x00$\x01\x03\x00\x01\x00\x01\x00\x00\xa4pEA\x00`{#\x91\x99\t\x0eh\x15\x06\x00\x04\x00\x1e\x01\x03\x00\x01\x00\x02\x00\x00\x00`{#\x91\x99\t\x0eh\x19\x08\x00\x04\x00%\x01\x03\x00\x01\x00\x03\x00\x00\x07\x87\x00\x00\x00`{#\x91\x99\t\x0e'
+    in_data = '\x68\x04\x01\x00\x7E\x14'
     #out_data = '\x05d\nD\x01\x00\n\x00n%\xc9\xc6\x81\x00\x00Q\x8a'
     d = Decoder()
     d.decode_in(in_data)
