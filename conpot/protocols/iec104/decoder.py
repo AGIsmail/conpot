@@ -23,7 +23,16 @@ from collections import namedtuple
 
 logger = logging.getLogger(__name__)
 
-
+#AGI - The type id field - a single-octet unsigned integer field.
+#AGI - interpreted with <1-127>: Standard type definitions, 
+#AGI - Breakdown: <1-40>: Process info in monitor direction, <45-51>: in control direction
+#AGI - Breakdown: <70>: Sys info in monitor direction, <100-106>: in control direction
+#AGI - Breakdown: <110-113>: Parameter in control direction
+#AGI - Breakdown: <120-126>: File Transfer
+#AGI - <128-255> are not defined by the standards and may be used by vendors
+#AGI - i.e.
+#AGI - <128-135>: Message routing ids, <136-244>: Special use.
+#AGI - For more information on the specifics of the protocol, please see Practical Industrial Data Communications: Best Practice Techniques By Deon Reynders, Steve Mackay, Edwin Wright
 Type_ID = {
     1: ['M_SP_NA_1', 'Single point information'],
     2: ['M_SP_TA_1', 'Single point information with time tag'],
@@ -94,7 +103,7 @@ Type_ID = {
     127: ['F_SC_NB_1', 'QueryLog - Request archive file']
 }
 
-
+#COT: Cause of Transmission. A six-bit code used in interpreting the info at the destination.
 E_IEC870_5_101COTType = {
     0: 'eIEC870_COT_UNUSED',
     1: 'eIEC870_COT_CYCLIC',
@@ -222,31 +231,48 @@ class Decoder(object):
         if len(asdu) >= 1:
             type_id = int(asdu[0].encode("hex"), 16)
             try:
-                print type_id, Type_ID[type_id][1]
+                print "Type id: {0} -  Description: {1}".format(type_id, Type_ID[type_id][1])
             except KeyError:
                 print "Unknown type id: {}".format(type_id)
             num_obj = 0
             if len(asdu) >= 2:
+                #AGI - 7th byte of the telegram; - First bit is the structure qualifier (SQ)
+                #AGI - SQ=0 -> Structure is a sequence of info objects; Remaining 7 bits = Number of objects 
+                #AGI - SQ=1 -> Structure is one info object; which may contain several info elements...
+                #AGI -         Therefore, one address, one time tag, and all measured values of same format.
                 num_obj = struct.unpack("b", asdu[1])[0]
                 print "num_objects:", num_obj
             if len(asdu) >= 3:
+                #AGI - 8th byte of the telegram; Cause of Transmission
                 cot = struct.unpack("b", asdu[2])[0]
                 cot_desc = E_IEC870_5_101COTDesc[E_IEC870_5_101COTType[cot]]
-                print cot_desc
+                print "COT: {}".format(cot_desc)
             if len(asdu) >= 4:
+                #AGI - 9th byte of the telegram; Originator Address
                 org_addr = struct.unpack("b", asdu[3])[0]
                 print "org_addr:", org_addr
             if len(asdu) >= 6:
+                #AGI - 10th and 11th bytes of the telegram; ASDU Address Fields
                 com_addr = struct.unpack("bb", asdu[4:6])
                 print "com_addr:", com_addr
-            print len(asdu)
+            print "Length of ASDU: {}".format(len(asdu))
             if num_obj > 0 and len(asdu) >= 8:
+                #AGI - create a new dictionary 'objects'
                 objects = dict()
+                #AGI - cycling through all objects
                 for i in range(1, num_obj + 1):
+                    #AGI - First object is at byte 6 of the ASDU
+                    #AGI - The first three bytes is always the Information object address fields (IOA)
+                    #AGI - The last three bytes consists of the scaled value and the quality descriptor (QDS) of the information object.
                     pos = i * 6
                     objects[i] = asdu[pos:pos + 6]
                     print struct.unpack("b" * len(objects[i]), objects[i])
         return unpacked_apci
+
+    #AGI - TBD - decode control field formats and identify if it's an I-Format, S-Format or U-Format.
+    #AGI - bit 0 of ctrl_1 = 0 -> I-format
+    #AGI - bit 0 = 0 and bit 1 =1 in ctrl_1 -> S-Format
+    #AGI - bit 0 & bit 1 = 1 in ctrl_1 -> U-Format
 
     def decode_in(self, data):
         unpacked_apci = self.unpack(data)
@@ -260,9 +286,9 @@ class Decoder(object):
 
 
 if __name__ == "__main__":
-    #in_data = '\x68\x34\x5A\x14\x7C\x00\x0B\x07\x03\x00\x0C\x00\x10\x30\x00\xBE\x09\x00\x11\x30\x00\x90\x09\x00\x0E\x30\x00\x75\x00\x00\x28\x30\x00\x25\x09\x00\x29\x30\x00\x75\x00\x00\x0F\x30\x00\x0F\x0A\x00\x2E\x30\x00\xAE\x05\x00'
+    in_data = '\x68\x34\x5A\x14\x7C\x00\x0B\x07\x03\x00\x0C\x00\x10\x30\x00\xBE\x09\x00\x11\x30\x00\x90\x09\x00\x0E\x30\x00\x75\x00\x00\x28\x30\x00\x25\x09\x00\x29\x30\x00\x75\x00\x00\x0F\x30\x00\x0F\x0A\x00\x2E\x30\x00\xAE\x05\x00'
     #in_data = '\x68\x0E\x4E\x14\x7C\x00\x65\x01\x0A\x00\x0C\x00\x00\x00\x00\x05'
-    in_data = 'h\x19\x04\x00\x04\x00$\x01\x03\x00\x01\x00\x01\x00\x00\xa4pEA\x00`{#\x91\x99\t\x0eh\x15\x06\x00\x04\x00\x1e\x01\x03\x00\x01\x00\x02\x00\x00\x00`{#\x91\x99\t\x0eh\x19\x08\x00\x04\x00%\x01\x03\x00\x01\x00\x03\x00\x00\x07\x87\x00\x00\x00`{#\x91\x99\t\x0e'
+    ##in_data = 'h\x19\x04\x00\x04\x00$\x01\x03\x00\x01\x00\x01\x00\x00\xa4pEA\x00`{#\x91\x99\t\x0eh\x15\x06\x00\x04\x00\x1e\x01\x03\x00\x01\x00\x02\x00\x00\x00`{#\x91\x99\t\x0eh\x19\x08\x00\x04\x00%\x01\x03\x00\x01\x00\x03\x00\x00\x07\x87\x00\x00\x00`{#\x91\x99\t\x0e'
     #out_data = '\x05d\nD\x01\x00\n\x00n%\xc9\xc6\x81\x00\x00Q\x8a'
     d = Decoder()
     d.decode_in(in_data)
